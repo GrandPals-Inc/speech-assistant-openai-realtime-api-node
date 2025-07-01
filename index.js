@@ -21,7 +21,8 @@ fastify.register(fastifyFormBody);
 fastify.register(fastifyWs);
 
 // Constants
-const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts. You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. Always stay positive, but work in a joke when appropriate.';
+// const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts. You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. Always stay positive, but work in a joke when appropriate.';
+const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who interviews seniors (older adults) who are interested in the GrandPals program. These seniors are hoping to become mentors in a program that would place them with elementary age students in a classroom setting. You are trying to get a sense of if they are the right fit for that environment, based on their background, comfortability with children, and mental state. Always stay positive, and try to keep it light.';
 const VOICE = 'alloy';
 const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
 
@@ -31,6 +32,8 @@ const LOG_EVENT_TYPES = [
     'response.content.done',
     'rate_limits.updated',
     'response.done',
+    'response.audio_transcript.done',
+    'conversation.item.input_audio_transcription.completed',
     'input_audio_buffer.committed',
     'input_audio_buffer.speech_stopped',
     'input_audio_buffer.speech_started',
@@ -50,9 +53,8 @@ fastify.get('/', async (request, reply) => {
 fastify.all('/incoming-call', async (request, reply) => {
     const twimlResponse = `<?xml version="1.0" encoding="UTF-8"?>
                           <Response>
-                              <Say>Please wait while we connect your call to the A. I. voice assistant, powered by Twilio and the Open-A.I. Realtime API</Say>
+                              <Say>Connecting you to the AI voice assistant.</Say>
                               <Pause length="1"/>
-                              <Say>O.K. you can start talking!</Say>
                               <Connect>
                                   <Stream url="wss://${request.headers.host}/media-stream" />
                               </Connect>
@@ -72,8 +74,8 @@ fastify.register(async (fastify) => {
         let lastAssistantItem = null;
         let markQueue = [];
         let responseStartTimestampTwilio = null;
-
-        const openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01', {
+        const transcription = []
+        const openAiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17', {
             headers: {
                 Authorization: `Bearer ${OPENAI_API_KEY}`,
                 "OpenAI-Beta": "realtime=v1"
@@ -87,6 +89,9 @@ fastify.register(async (fastify) => {
                 session: {
                     turn_detection: { type: 'server_vad' },
                     input_audio_format: 'g711_ulaw',
+                    input_audio_transcription:{
+                        model:'whisper-1'
+                    },
                     output_audio_format: 'g711_ulaw',
                     voice: VOICE,
                     instructions: SYSTEM_MESSAGE,
@@ -99,7 +104,7 @@ fastify.register(async (fastify) => {
             openAiWs.send(JSON.stringify(sessionUpdate));
 
             // Uncomment the following line to have AI speak first:
-            // sendInitialConversationItem();
+            sendInitialConversationItem();
         };
 
         // Send initial conversation item if AI talks first
@@ -112,7 +117,7 @@ fastify.register(async (fastify) => {
                     content: [
                         {
                             type: 'input_text',
-                            text: 'Greet the user with "Hello there! I am an AI voice assistant powered by Twilio and the OpenAI Realtime API. You can ask me for facts, jokes, or anything you can imagine. How can I help you?"'
+                            text: 'Greet the user with "Hello there! I am an AI voice assistant calling from GrandPals. Would you mind if I take a few minutes and ask you some questions about your interest in becoming a GrandPal?'
                         }
                     ]
                 }
@@ -177,7 +182,7 @@ fastify.register(async (fastify) => {
                 const response = JSON.parse(data);
 
                 if (LOG_EVENT_TYPES.includes(response.type)) {
-                    console.log(`Received event: ${response.type}`, response);
+                    console.log(`Received event: ${response.type}`, JSON.stringify(response,null,2));
                 }
 
                 if (response.type === 'response.audio.delta' && response.delta) {
@@ -204,6 +209,20 @@ fastify.register(async (fastify) => {
                 if (response.type === 'input_audio_buffer.speech_started') {
                     handleSpeechStartedEvent();
                 }
+                
+                if (response.type === 'conversation.item.input_audio_transcription.completed') {
+                   transcription.push({
+                    name: 'GrandPal',
+                    said: response.transcript
+                   }) 
+                }
+                if (response.type === 'response.audio_transcript.done') {
+                   transcription.push({
+                    name: 'AI',
+                    said: response.transcript
+                   }) 
+                }
+
             } catch (error) {
                 console.error('Error processing OpenAI message:', error, 'Raw message:', data);
             }
@@ -257,6 +276,7 @@ fastify.register(async (fastify) => {
         // Handle WebSocket close and errors
         openAiWs.on('close', () => {
             console.log('Disconnected from the OpenAI Realtime API');
+            console.log(transcription)
         });
 
         openAiWs.on('error', (error) => {
