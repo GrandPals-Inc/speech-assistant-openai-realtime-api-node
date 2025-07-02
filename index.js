@@ -23,10 +23,10 @@ fastify.register(fastifyWs);
 // Constants
 // const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who loves to chat about anything the user is interested about and is prepared to offer them facts. You have a penchant for dad jokes, owl jokes, and rickrolling – subtly. Always stay positive, but work in a joke when appropriate.';
 // const SYSTEM_MESSAGE = 'You are a helpful and bubbly AI assistant who interviews seniors (older adults) who are interested in the GrandPals program. These seniors are hoping to become mentors in a program that would place them with elementary age students in a classroom setting. You are trying to get a sense of if they are the right fit for that environment, based on their background, comfortability with children, and mental state. Always stay positive, and try to keep it light.';
-const SYSTEM_MESSAGE = `You are a helpfulAI assistant who interviews seniors (older adults) who are interested in the GrandPals program. 
+const SYSTEM_MESSAGE = `You are a helpful and bubbly AI assistant who interviews seniors (older adults) who are interested in the GrandPals program. 
 These seniors are hoping to become mentors in a program that would place them with elementary age students in a classroom setting.
 You are trying to get a sense of if they are the right fit for that environment, based on their background, comfortability with children, and mental state.
-Start by explaining the overview of the GrandPals Program: their next steps will be to complete a Vulnerable Sector Check, attend in-person orientation (orientation consists of 3 sessions of 1.5 hours in length), and then sign up for an in-person GrandPals program (the GrandPals program brings together a group or cohort of GrandPals/seniors and a group or cohort of elementary age students in weekly intergenerational sessions. The GrandPals Program session series starts with the first session being a "Meet & Greet", followed by themed sessions, and the final session is a celebration.)
+Start by explaining the overview of the GrandPals Program: their next steps will be to complete a Vulnerable Sector Check, attend in-person orientation (orientation consists of 3 sessions of one and a half hours in length), and then sign up for an in-person GrandPals program (the GrandPals program brings together a group or cohort of GrandPals/seniors and a group or cohort of elementary age students in weekly intergenerational sessions. The GrandPals Program session series starts with the first session being a "Meet & Greet", followed by themed sessions, and the final session is a celebration.)
 Always stay positive, and try to keep it light.`;
 const VOICE = 'alloy';
 const PORT = process.env.PORT || 5050; // Allow dynamic port assignment
@@ -68,9 +68,13 @@ fastify.all('/incoming-call', async (request, reply) => {
     reply.type('text/xml').send(twimlResponse);
 });
 
+const baseURL = 'https://cow-frank-freely.ngrok.app'
+
 // WebSocket route for media-stream
 fastify.register(async (fastify) => {
     fastify.get('/media-stream', { websocket: true }, (connection, req) => {
+        
+        fetch(`${baseURL}/twilio/call-started?userId=${userId}`)
         console.log('Client connected');
         
         // Connection-specific state
@@ -259,7 +263,13 @@ fastify.register(async (fastify) => {
                         firstName = data.start.firstName;
                         lastName = data.start.lastName;
                         console.log('Incoming stream has started', streamSid, userId, firstName,lastName);
-
+                        fetch(`${baseURL}/twilio/interview`,{
+                            method:'POST',
+                            body: JSON.stringify({
+                              userId,
+                              _action: 'CALL_STARTED',
+                            })                
+                        });
                         // Reset start and media timestamp on a new stream
                         responseStartTimestampTwilio = null; 
                         latestMediaTimestamp = 0;
@@ -288,6 +298,15 @@ fastify.register(async (fastify) => {
         openAiWs.on('close', () => {
             console.log('Disconnected from the OpenAI Realtime API');
             console.log(transcription)
+            fetch(`${baseURL}/twilio/call-started`,{
+                method:'POST',
+                body: JSON.stringify({
+                  userId,
+                  _action: 'CALL_COMPLETE',
+                  transcription
+                })
+            });
+
         });
 
         openAiWs.on('error', (error) => {
