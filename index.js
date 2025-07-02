@@ -74,7 +74,6 @@ const baseURL = 'https://cow-frank-freely.ngrok.app'
 fastify.register(async (fastify) => {
     fastify.get('/media-stream', { websocket: true }, (connection, req) => {
         
-        fetch(`${baseURL}/twilio/call-started?userId=${userId}`)
         console.log('Client connected');
         
         // Connection-specific state
