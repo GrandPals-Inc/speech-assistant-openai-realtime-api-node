@@ -297,7 +297,7 @@ fastify.register(async (fastify) => {
         openAiWs.on('close', () => {
             console.log('Disconnected from the OpenAI Realtime API');
             console.log(transcription)
-            fetch(`${baseURL}/twilio/call-started`,{
+            fetch(`${baseURL}/twilio/interview`,{
                 method:'POST',
                 body: JSON.stringify({
                   userId,
