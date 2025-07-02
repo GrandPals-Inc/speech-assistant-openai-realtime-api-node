@@ -73,11 +73,11 @@ fastify.register(async (fastify) => {
     fastify.get('/media-stream', { websocket: true }, (connection, req) => {
         console.log('Client connected');
         
-        const firstName = req.query.firstName
-        const lastName = req.query.lastName
-        const userId = req.query.userId
         // Connection-specific state
         let streamSid = null;
+        let userId = null;
+        let firstName = null;
+        let lastName = null;
         let latestMediaTimestamp = 0;
         let lastAssistantItem = null;
         let markQueue = [];
@@ -255,7 +255,10 @@ fastify.register(async (fastify) => {
                         break;
                     case 'start':
                         streamSid = data.start.streamSid;
-                        console.log('Incoming stream has started', streamSid);
+                        userId = data.start.userId;
+                        firstName = data.start.firstName;
+                        lastName = data.start.lastName;
+                        console.log('Incoming stream has started', streamSid, userId, firstName,lastName);
 
                         // Reset start and media timestamp on a new stream
                         responseStartTimestampTwilio = null; 
